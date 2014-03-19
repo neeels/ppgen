@@ -2,13 +2,14 @@
 
 usage = """
 Generate a passphrase consisting of a number of words selected from a
-file. What file you choose as a source of words is and should be up to you.
-A dictionary file would be a possible choice.
+file. Any plain text file can serve as source; A dictionary file would be a
+possible choice.
 
 Usage:
-  ppgen <dict> <length>[w] [-m <max-word-len>]
+  ppgen [<length>[w]] [<dict>] [-m <max-word-len>] [-n <nr-of-suggestions>]
+        [-q]
 
-<dict>     path to a plain text file with words
+<dict>     path to a plain text file with words, '-' for stdin
 <length>   desired length in number of characters
 <length>w  desired length in number of words
 
@@ -27,55 +28,108 @@ def err(*msgs):
   exit(1)
 
 
-opts_list, args = getopt.gnu_getopt(sys.argv[1:], 'm:')
+opts_list, args = getopt.gnu_getopt(sys.argv[1:], 'm:n:q')
 
-if len(args) != 2:
-  err(usage)
+if len(args) > 2:
+  err(usage, '\nppgen: error: too many arguments')
 
 opts = {}
 for o,v in opts_list:
+  if v is '':
+    v = 1
   opts[o] = int(v) # overwrite previous occurence
 
-max_word_len = opts.get('-m')
+quiet = '-q' in opts
 
-words_path, len_str = args
-
-words = list( set( open(words_path).read().split() ) )
-
-for n in range(12):
-
-  if len_str.endswith('w'):
-    n_words = int(len_str[:-1])
-    phrase = []
-    iterations = 0
-    while len(phrase) < n_words:
-      w = random.choice(words)
-      if max_word_len and len(w) > max_word_len:
-        if iterations > 10000:
-          w = w[:max_word_len]
-        else:
-          iterations += 1
-          continue
-      else:
-        iterations = 0
-      phrase.append(w)
+words_path = None
+len_str = None
+for a in args:
+  if a.isdigit() or a.endswith('w') and a[:-1].isdigit():
+    if os.path.isfile(a):
+      err("ppgen: ambiguous: '", a, "' is both a file and a length argument")
+    len_str = a
   else:
-    n_chars = int(len_str)
+    words_path = a
+
+if not len_str:
+  len_str = '3w'
+
+if not words_path:
+  dicts_dir = '/usr/share/dict'
+  #words_path = os.path.join(dicts_dir, 'words')
+  #if not os.path.isfile(words_path):
+  dicts = os.listdir(dicts_dir)
+  words_path = os.path.join(dicts_dir, random.choice(dicts))
+  if not quiet:
+    print 'using:', words_path
+
+if words_path == '-':
+  infile = sys.stdin
+else:
+  infile = open(words_path)
+
+max_word_len = opts.get('-m') or 20
+N = opts.get('-n') or 20
+
+words_list = list( set( infile.read().split() ) )
+
+def split(lst, key_func):
+  d = {}
+  for i in lst:
+    k = key_func(i)
+    dl = d.get(k)
+    if dl is None:
+      dl = []
+      d[k] = dl
+    dl.append(i)
+  return d
+
+def pick(len_dict, allowed_lengths):
+  counts = [len(len_dict.get(l) or ()) for l in allowed_lengths]
+  count = sum(counts)
+  if not count:
+    return chr(random.randint(ord('A'), ord('Z')))
+  idx = random.randint(0, sum(counts) - 1)
+  len_idx = 0
+  for c in counts:
+    if idx >= c:
+      idx -= c
+      len_idx += 1
+      continue
+    return len_dict[ allowed_lengths[len_idx] ][idx]
+  return len_idx[ allowed_lengths[:-1] ][-1]
+
+
+
+words = split(words_list, len)
+
+if len_str.endswith('w'):
+  # an argument like '3w', three words
+  n_words = int(len_str[:-1])
+  n_chars = None
+else:
+  n_chars = int(len_str)
+  n_words = None
+
+for n in range(N):
+
+  if n_words:
+    phrase = []
+    while len(phrase) < n_words:
+      w = pick(words, range(1, max_word_len + 1))
+      phrase.append(w)
+  elif n_chars:
     phrase = []
     left = n_chars
-    iterations = 0
     while left > 0:
-      w = random.choice(words)
-      if len(w) > left or len(w) == (left-1) or max_word_len and len(w) > max_word_len:
-        if iterations > 10000:
-          w = w[:min(left, max_word_len)]
-        else:
-          iterations += 1
-          continue
-      else:
-        iterations = 0
+      allowed_lengths = range(1, max(1, min(left - 3, max_word_len))+1 )
+      allowed_lengths.append(left)
+
+      w = pick(words, allowed_lengths)
       phrase.append(w)
       left -= len(w) + 1; # plus space
+  else:
+    err("what?")
 
   print ' '.join(phrase)
 
