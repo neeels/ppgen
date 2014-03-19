@@ -1,0 +1,81 @@
+#!/usr/bin/env python
+
+usage = """
+Generate a passphrase consisting of a number of words selected from a
+file. What file you choose as a source of words is and should be up to you.
+A dictionary file would be a possible choice.
+
+Usage:
+  ppgen <dict> <length>[w] [-m <max-word-len>]
+
+<dict>     path to a plain text file with words
+<length>   desired length in number of characters
+<length>w  desired length in number of words
+
+Examples:
+  ppgen ~/dissertation/notes.txt 20
+  ppgen ~/Mail/Inbox 3w -m 6
+"""
+
+import sys, os, random, getopt
+
+def err(*msgs):
+  msg = ''.join(msgs)
+  sys.stderr.write(msg)
+  if not msg.endswith('\n'):
+    sys.stderr.write('\n')
+  exit(1)
+
+
+opts_list, args = getopt.gnu_getopt(sys.argv[1:], 'm:')
+
+if len(args) != 2:
+  err(usage)
+
+opts = {}
+for o,v in opts_list:
+  opts[o] = int(v) # overwrite previous occurence
+
+max_word_len = opts.get('-m')
+
+words_path, len_str = args
+
+words = list( set( open(words_path).read().split() ) )
+
+for n in range(12):
+
+  if len_str.endswith('w'):
+    n_words = int(len_str[:-1])
+    phrase = []
+    iterations = 0
+    while len(phrase) < n_words:
+      w = random.choice(words)
+      if max_word_len and len(w) > max_word_len:
+        if iterations > 10000:
+          w = w[:max_word_len]
+        else:
+          iterations += 1
+          continue
+      else:
+        iterations = 0
+      phrase.append(w)
+  else:
+    n_chars = int(len_str)
+    phrase = []
+    left = n_chars
+    iterations = 0
+    while left > 0:
+      w = random.choice(words)
+      if len(w) > left or len(w) == (left-1) or max_word_len and len(w) > max_word_len:
+        if iterations > 10000:
+          w = w[:min(left, max_word_len)]
+        else:
+          iterations += 1
+          continue
+      else:
+        iterations = 0
+      phrase.append(w)
+      left -= len(w) + 1; # plus space
+
+  print ' '.join(phrase)
+
