@@ -10,8 +10,8 @@ Usage:
         [-q]
 
 <dict>     path to a plain text file with words, '-' for stdin
-<length>   desired length in number of characters
-<length>w  desired length in number of words
+<length>   desired overall length in number of characters
+<length>w  desired number of words
 
 Examples:
   ppgen ~/dissertation/notes.txt 20
@@ -28,7 +28,7 @@ def err(*msgs):
   exit(1)
 
 
-opts_list, args = getopt.gnu_getopt(sys.argv[1:], 'm:n:q')
+opts_list, args = getopt.gnu_getopt(sys.argv[1:], 'm:n:qh')
 
 if len(args) > 2:
   err(usage, '\nppgen: error: too many arguments')
@@ -38,6 +38,10 @@ for o,v in opts_list:
   if v is '':
     v = 1
   opts[o] = int(v) # overwrite previous occurence
+
+if '-h' in opts:
+  print usage
+  exit(0)
 
 quiet = '-q' in opts
 
